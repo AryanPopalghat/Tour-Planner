@@ -1,0 +1,12 @@
+pyplaintext
+fastapi
+uvicorn
+neo4j
+transformers
+torch
+streamlit
+requests
+pydantic
+python-multipart
+kinde-python-sdk
+ortools
