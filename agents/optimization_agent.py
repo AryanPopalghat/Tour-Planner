@@ -1,5 +1,5 @@
 class OptimizationAgent:
-    def optimize_route(self, itinerary, budget):
+    def optimize_route(itinerary, budget):
         optimized_itinerary = []
 
         for stop in itinerary:

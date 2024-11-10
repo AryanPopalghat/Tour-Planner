@@ -2,6 +2,13 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
+
+
+
+class ChatRequest(BaseModel):
+    user_id: str
+    message: str
+    
 class PreferencesModel(BaseModel):
     city: str
     interests: List[str]

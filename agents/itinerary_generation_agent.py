@@ -1,42 +1,76 @@
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-import torch
+import requests
 
 class ItineraryGenerationAgent:
-    def __init__(self, model_name="sshleifer/distilbart-cnn-6-6", device="cpu"):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
-        self.device = device
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.places_base_url = "https://api.geoapify.com/v2/places"
+        self.geocoding_base_url = "https://api.geoapify.com/v1/geocode/search"
 
-    def generate_itinerary(self, city, interests, start_time, end_time, budget, suggested_places):
-        place_list = "; ".join(suggested_places)
-        prompt = (
-            f"Create a detailed itinerary for a day trip in {city} from {start_time} to {end_time} with a budget of ${budget}. "
-            f"Include the following stops based on the interests in {', '.join(interests)}: {place_list}. "
-            "For each stop, provide the following details: Name, Time, Entry Fee, Transportation, and Status."
-        )
+    def get_coordinates(self, city):
+        """Fetches the latitude and longitude of a city using Geoapify's geocoding API."""
+        params = {
+            "text": city,
+            "apiKey": self.api_key
+        }
+        response = requests.get(self.geocoding_base_url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            if data['features']:
+                # Return the coordinates of the first result
+                location = data['features'][0]['geometry']['coordinates']
+                return location[1], location[0]  # latitude, longitude
+            else:
+                print(f"No results found for city: {city}")
+        else:
+            print(f"Error fetching coordinates: {response.status_code} - {response.text}")
+        return None, None
+
+    def get_places(self, location, categories, radius=5000, limit=5):
+        params = {
+            "categories": ",".join(categories),
+            "filter": f"circle:{location[1]},{location[0]},{radius}",
+            "limit": limit,
+            "apiKey": self.api_key
+        }
+        response = requests.get(self.places_base_url, params=params)
+        if response.status_code == 200:
+            return response.json().get('features', [])
+        else:
+            print(f"Error fetching places: {response.status_code} - {response.text}")
+            return []
+
+    def generate_itinerary(self, city, interests, start_time, end_time, budget):
+        # Get coordinates for the city
+        latitude, longitude = self.get_coordinates(city)
+        if latitude is None or longitude is None:
+            return [{"Error": "Unable to find location for the specified city"}]
+
+        # Map interests to Geoapify categories
+        interest_to_category = {
+            "food": "catering.restaurant",
+            "shopping": "commercial.shopping_mall",
+            "adventure": "leisure.outdoor",
+            "culture": "entertainment.museum"
+        }
         
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        outputs = self.model.generate(inputs.input_ids, max_length=500)
-        itinerary_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Get relevant categories based on user interests
+        categories = [interest_to_category[interest.lower()] for interest in interests if interest.lower() in interest_to_category]
 
+        # Fetch places from Geoapify
+        places = self.get_places((latitude, longitude), categories)
+
+        # Format the itinerary with fetched place details
         itinerary = []
-        for line in itinerary_text.split('\n'):
-            if "Stop" in line or "Name" in line:
-                stop = {
-                    "name": line.split(":", 1)[1].strip() if ":" in line else "Unknown Place",
-                    "time": "TBD",
-                    "entry_fee": "$0",
-                    "transportation": "Walk",
-                    "status": "Open"
-                }
-                itinerary.append(stop)
-            elif "Time" in line:
-                itinerary[-1]["time"] = line.split(":", 1)[1].strip()
-            elif "Entry Fee" in line:
-                itinerary[-1]["entry_fee"] = line.split(":", 1)[1].strip()
-            elif "Transportation" in line:
-                itinerary[-1]["transportation"] = line.split(":", 1)[1].strip()
-            elif "Status" in line:
-                itinerary[-1]["status"] = line.split(":", 1)[1].strip()
-
+        for i, place in enumerate(places, start=1):
+            properties = place.get('properties', {})
+            itinerary.append({
+                "Stop": i,
+                "Name": properties.get("name", "Unknown Place"),
+                "Time": f"{start_time} - {end_time}",  # Example timing; adjust based on actual need
+                "Entry Fee": properties.get("fee", "TBD"),
+                "Transportation": "Walk",
+                "Status": properties.get("opening_hours", "Open") if properties.get("opening_hours") else "TBD",
+                "Address": properties.get("formatted", "No Address Available")
+            })
+        
         return itinerary

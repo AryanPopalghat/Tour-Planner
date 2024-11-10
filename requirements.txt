@@ -10,3 +10,7 @@ pydantic
 python-multipart
 kinde-python-sdk
 ortools
+transformers
+requests
+jinja2
+kinde-python-sdk
