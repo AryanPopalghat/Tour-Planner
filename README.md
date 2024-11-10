@@ -69,3 +69,5 @@ The frontend, built with Streamlit, serves as the user interface where users can
 ## Video Link
 
 [Click here](https://drive.google.com/file/d/19zQaAGRT580rwJxu_n9NCHvHrB7_9lig/view?usp=sharing)
+
+Please watch it in 1.5-2x speed.
